@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shifra — Voice Assistant (single file)</title>
+  <style>
+    /* Basic responsive styling */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+
+    :root{
+      --bg:#080808;
+      --accent1:#e503b4;
+      --accent2:#0eccf3;
+      --card:#0f0f10;
+      --muted:#bdbdbd;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:Inter,system-ui,Arial,sans-serif;
+      background:linear-gradient(180deg,var(--bg),#000);
+      color:white;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:28px;
+    }
+
+    .app{
+      width:100%;
+      max-width:760px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border:1px solid rgba(255,255,255,0.04);
+      border-radius:14px;
+      padding:22px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    }
+
+    header{
+      display:flex;
+      gap:16px;
+      align-items:center;
+    }
+
+    .logo{
+      width:64px;
+      height:64px;
+      border-radius:12px;
+      background:linear-gradient(135deg,var(--accent1),var(--accent2));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:700;
+      font-size:20px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.6);
+    }
+
+    h1{
+      margin:0;
+      font-size:20px;
+      line-height:1;
+    }
+    p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+    .controls{
+      display:flex;
+      gap:12px;
+      margin-top:18px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    button.primary{
+      background:linear-gradient(90deg,var(--accent1),var(--accent2));
+      border:none;
+      padding:10px 16px;
+      color:white;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:600;
+      display:inline-flex;
+      gap:10px;
+      align-items:center;
+      box-shadow:0 6px 18px rgba(14,204,243,0.06);
+    }
+
+    button.ghost{
+      background:transparent;
+      border:1px solid rgba(255,255,255,0.06);
+      color:var(--muted);
+      padding:10px 12px;
+      border-radius:10px;
+      cursor:pointer;
+    }
+
+    .status{
+      margin-left:auto;
+      background:rgba(255,255,255,0.02);
+      padding:8px 12px;
+      border-radius:10px;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .voice-gif{
+      width:120px;
+      height:120px;
+      margin:18px auto;
+      display:block;
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.03);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .log{
+      margin-top:16px;
+      border-radius:10px;
+      padding:12px;
+      background:rgba(0,0,0,0.3);
+      min-height:70px;
+      font-size:14px;
+      color:#e8e8e8;
+      overflow:auto;
+      max-height:180px;
+    }
+
+    .fallback{
+      margin-top:12px;
+      display:flex;
+      gap:8px;
+    }
+    input[type="text"]{
+      flex:1;
+      padding:10px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.06);
+      background:transparent;
+      color:white;
+    }
+
+    small.note{display:block;color:var(--muted);margin-top:8px;font-size:12px}
+
+    @media (max-width:520px){
+      .controls{flex-direction:column;align-items:stretch}
+      .status{margin-left:0}
+      .voice-gif{width:100px;height:100px}
+    }
+  </style>
+</head>
+<body>
+  <main class="app" role="main" aria-labelledby="title">
+    <header>
+      <div class="logo" aria-hidden="true">S</div>
+      <div>
+        <h1 id="title">Shifra — Your Voice Assistant</h1>
+        <p class="lead">Click the mic to speak, or type below. Works best in Chromium-based browsers.</p>
+      </div>
+
+      <div class="status" id="status">Status: <span id="statusText">idle</span></div>
+    </header>
+
+    <div class="voice-gif" id="voiceBox" aria-hidden="true">
+      <!-- simple animated SVG ring to show listening -->
+      <svg id="wave" width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="40" cy="40" r="18" stroke="white" stroke-opacity="0.18" stroke-width="4"/>
+        <g id="ring" opacity="0.2">
+          <circle cx="40" cy="40" r="28" stroke="white" stroke-opacity="0.08" stroke-width="3"/>
+        </g>
+      </svg>
+      <div style="position:absolute; font-size:12px; margin-top:56px; color:var(--muted)">voice status</div>
+    </div>
+
+    <div class="controls" role="region" aria-label="controls">
+      <button class="primary" id="btnSpeak" title="Start listening (microphone)">
+        <!-- mic SVG -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="vertical-align:middle">
+          <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M19 11v1a7 7 0 0 1-14 0v-1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 19v4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="btnLabel">Start Listening</span>
+      </button>
+
+      <button class="ghost" id="btnStop" title="Stop listening" disabled>Stop</button>
+      <button class="ghost" id="btnWish" title="Greet me">Greet</button>
+
+      <div style="width:1px"></div>
+
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="ghost" id="btnYT" title="Open YouTube">YouTube</button>
+        <button class="ghost" id="btnGoogle" title="Open Google">Google</button>
+      </div>
+    </div>
+
+    <div class="fallback">
+      <input id="typedInput" type="text" placeholder="Or type a command (e.g. 'open youtube', 'time', 'who are you')" />
+      <button class="primary" id="btnSend">Send</button>
+    </div>
+
+    <div class="log" id="log" aria-live="polite"></div>
+    <small class="note">Tip: If the microphone doesn't start, check browser site settings to allow microphone.</small>
+  </main>
+
+  <script>
+    /* ---------- feature detection and helpers ---------- */
+    const statusText = document.getElementById('statusText');
+    const logEl = document.getElementById('log');
+    const btnSpeak = document.getElementById('btnSpeak');
+    const btnStop = document.getElementById('btnStop');
+    const btnWish = document.getElementById('btnWish');
+    const btnYT = document.getElementById('btnYT');
+    const btnGoogle = document.getElementById('btnGoogle');
+    const typedInput = document.getElementById('typedInput');
+    const btnSend = document.getElementById('btnSend');
+    const btnLabel = document.getElementById('btnLabel');
+    const voiceBox = document.getElementById('voiceBox');
+
+    function log(...args){
+      const t = new Date().toLocaleTimeString();
+      logEl.innerHTML = `<div style="opacity:0.9"><strong>[${t}]</strong> ${args.join(' ')}</div>` + logEl.innerHTML;
+    }
+
+    function setStatus(s){
+      statusText.textContent = s;
+      if(s === 'listening'){
+        voiceBox.style.border = '2px solid rgba(14,204,243,0.08)';
+        btnLabel.textContent = 'Listening...';
+      } else if(s === 'speaking' || s === 'thinking') {
+        btnLabel.textContent = 'Processing...';
+      } else {
+        voiceBox.style.border = 'none';
+        btnLabel.textContent = 'Start Listening';
+      }
+    }
+
+    // sanitize text for search
+    function sanitizeQuery(q){
+      return encodeURIComponent(q.trim());
+    }
+
+    // Speech synthesis wrapper with feature detection
+    function speak(text, opts = {}){
+      try {
+        if(!('speechSynthesis' in window)){
+          log('[speak] speechSynthesis not supported — showing text:', text);
+          return;
+        }
+        const utt = new SpeechSynthesisUtterance(text);
+        utt.rate = opts.rate || 1;
+        utt.pitch = opts.pitch || 1;
+        utt.lang = opts.lang || 'en-GB';
+        setStatus('speaking');
+        utt.onend = () => { setStatus('idle'); };
+        window.speechSynthesis.cancel(); // stop any previous
+        window.speechSynthesis.speak(utt);
+      } catch(e){
+        log('[speak] error', e);
+      }
+    }
+
+    /* ---------- SpeechRecognition setup ---------- */
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+    let recognition = null;
+    let isListening = false;
+
+    if(!SpeechRecognition){
+      log('SpeechRecognition not available in this browser. Use the typed input or try Chrome.');
+      btnSpeak.disabled = false; // allow typed mode
+      btnSpeak.title = 'Microphone not available — use typed input';
+    } else {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = false;
+
+      recognition.onstart = () => {
+        isListening = true;
+        setStatus('listening');
+        btnStop.disabled = false;
+        log('Microphone opened — listening...');
+      };
+
+      recognition.onerror = (ev) => {
+        log('Recognition error:', ev.error || ev.message || JSON.stringify(ev));
+        setStatus('idle');
+        isListening = false;
+        btnStop.disabled = true;
+      };
+
+      recognition.onend = () => {
+        isListening = false;
+        setStatus('idle');
+        btnStop.disabled = true;
+        log('Listening stopped.');
+      };
+
+      recognition.onresult = (event) => {
+        const idx = event.resultIndex || 0;
+        const transcript = (event.results[idx][0].transcript || '').trim();
+        log('Heard:', transcript);
+        handleCommand(transcript.toLowerCase());
+      };
+    }
+
+    /* ---------- command handling ---------- */
+    function handleCommand(message){
+      if(!message || !message.trim()){
+        speak('I did not hear anything. Please try again.');
+        return;
+      }
+
+      setStatus('thinking');
+      // Normalize common names to support variants
+      const msg = message.replace(/\s+/g,' ').trim();
+
+      // greetings
+      if(/^(hi|hello|hey)\b/.test(msg)){
+        speak('Hello! How can I help you today?');
+        log('Reply: greeting');
+        return;
+      }
+
+      if(msg.includes('who are you') || msg.includes('what are you')){
+        speak('I am Shifra, your virtual assistant. I can open websites, tell the time or search the web.');
+        log('Reply: identity');
+        return;
+      }
+
+      if(msg.includes('open youtube') || msg.includes('youtube')){
+        speak('Opening YouTube.');
+        window.open('https://www.youtube.com','_blank','noopener');
+        log('Action: open youtube');
+        return;
+      }
+
+      if(msg.includes('open google') || msg.includes('google')){
+        speak('Opening Google.');
+        window.open('https://www.google.com','_blank','noopener');
+        log('Action: open google');
+        return;
+      }
+
+      if(msg.includes('open facebook') || msg.includes('facebook')){
+        speak('Opening Facebook.');
+        window.open('https://www.facebook.com','_blank','noopener');
+        log('Action: open facebook');
+        return;
+      }
+
+      if(msg.includes('open instagram') || msg.includes('instagram')){
+        speak('Opening Instagram.');
+        window.open('https://www.instagram.com','_blank','noopener');
+        log('Action: open instagram');
+        return;
+      }
+
+      if(msg.includes('time') && msg.length < 12){
+        const t = new Date();
+        const timestr = t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+        speak('The time is ' + timestr);
+        log('Reply: time', timestr);
+        return;
+      }
+
+      if(msg.includes('date') && msg.length < 12){
+        const d = new Date();
+        const datestr = d.toLocaleDateString();
+        speak("Today's date is " + datestr);
+        log('Reply: date', datestr);
+        return;
+      }
+
+      // calculator / whatsapp / custom protocols: browsers often block these, so explain
+      if(msg.includes('open calculator')){
+        speak('I cannot open native apps from this page in most browsers. Try searching instead.');
+        log('Note: cannot open native calculator from browser');
+        return;
+      }
+
+      if(msg.includes('open whatsapp')){
+        speak('Opening WhatsApp web.');
+        window.open('https://web.whatsapp.com','_blank','noopener');
+        log('Action: open whatsapp web');
+        return;
+      }
+
+      // fallback search behavior
+      // remove assistant name if mentioned
+      const cleaned = msg.replace(/\b(shifra|shipra|shifrah|shipra)\b/gi,'').trim();
+      const query = sanitizeQuery(cleaned || msg);
+      speak('I found some information for ' + (cleaned || msg) + '. Opening search results.');
+      window.open('https://www.google.com/search?q=' + query, '_blank','noopener');
+      log('Action: search ->', decodeURIComponent(query));
+    }
+
+    /* ---------- UI event wiring ---------- */
+    btnSpeak.addEventListener('click', async () => {
+      // Try to start recognition if available
+      if(!SpeechRecognition){
+        // show quick hint to use typed input
+        setStatus('idle');
+        log('No microphone support. Use typed input below.');
+        typedInput.focus();
+        return;
+      }
+
+      try {
+        // attempt to get microphone permission by starting recognition
+        log('Requesting microphone...');
+        recognition.start();
+      } catch(e){
+        log('Could not start recognition:', e && e.message ? e.message : e);
+      }
+    });
+
+    btnStop.addEventListener('click', () => {
+      if(recognition && isListening){
+        recognition.stop();
+        setStatus('idle');
+        log('Stop requested by user.');
+      }
+    });
+
+    btnWish.addEventListener('click', ()=>{
+      // greeting that uses current time
+      const h = new Date().getHours();
+      if(h < 12) speak('Good morning. How can I help you?');
+      else if(h < 17) speak('Good afternoon. How can I help you?');
+      else speak('Good evening. How can I help you?');
+      log('Greet executed.');
+    });
+
+    btnYT.addEventListener('click', ()=> handleCommand('open youtube'));
+    btnGoogle.addEventListener('click', ()=> handleCommand('open google'));
+
+    // typed input
+    btnSend.addEventListener('click', ()=>{
+      const text = typedInput.value || '';
+      if(!text.trim()){
+        log('No typed command.');
+        speak('Please type a command or click the mic to speak.');
+        return;
+      }
+      log('Typed command:', text);
+      handleCommand(text.toLowerCase());
+      typedInput.value = '';
+    });
+
+    typedInput.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter') btnSend.click();
+    });
+
+    // update status based on speechSynthesis events (in case speak used)
+    if('speechSynthesis' in window){
+      window.speechSynthesis.onvoiceschanged = ()=> {/* no-op - ensures voices load */};
+      // when speaking ends, ensure idle state set
+      // we rely on utterance.onend inside speak()
+    }
+
+    // initial checks
+    (function init(){
+      setStatus('idle');
+      if(!('speechSynthesis' in window)){
+        log('Warning: speechSynthesis not supported. You will not hear audio replies.');
+      } else {
+        log('speechSynthesis OK.');
+      }
+
+      if(!SpeechRecognition){
+        log('Warning: SpeechRecognition not supported. You can still type commands below.');
+        btnStop.disabled = true;
+      } else {
+        log('SpeechRecognition available. Click Start Listening and allow microphone access.');
+      }
+
+      // small helpful example
+      log('Try commands: "open youtube", "who are you", "time", "date", or type a question.');
+    })();
+  </script>
+</body>
+</html>
